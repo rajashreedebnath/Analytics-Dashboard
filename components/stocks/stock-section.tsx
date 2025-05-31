@@ -43,7 +43,19 @@ interface CompanyOverview {
   Exchange: string;
 }
 
-export default function StockSection() {
+interface RawStockEntry {
+  "1. open": string;
+  "2. high": string;
+  "3. low": string;
+  "4. close": string;
+  "5. volume": string;
+}
+
+interface StockSectionProps {
+  onSearch?: (query: string) => void;
+}
+
+export default function StockSection({ onSearch }: StockSectionProps) {
   const [symbol, setSymbol] = useState("AAPL");
   const [input, setInput] = useState("AAPL");
   const [stockData, setStockData] = useState<StockData[]>([]);
@@ -72,10 +84,25 @@ export default function StockSection() {
         throw new Error("Failed to fetch stock data.");
       }
 
-      const timeSeriesData = await timeSeriesRes.json();
+      const rawTimeSeries = await timeSeriesRes.json();
       const overviewData = await overviewRes.json();
 
-      setStockData(timeSeriesData);
+      // Sort and format the time series data (latest first)
+      const formattedData: StockData[] = Object.entries(rawTimeSeries)
+        .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+        .map(([date, value]) => {
+          const v = value as Record<string, string>;
+          return {
+            date,
+            open: parseFloat(v["1. open"]),
+            high: parseFloat(v["2. high"]),
+            low: parseFloat(v["3. low"]),
+            close: parseFloat(v["4. close"]),
+            volume: parseInt(v["5. volume"]),
+          };
+        });
+
+      setStockData(formattedData);
       setOverview(overviewData);
     } catch (err: any) {
       setError(err.message || "An error occurred.");
@@ -84,7 +111,11 @@ export default function StockSection() {
     }
   };
 
-  const handleSearch = () => setSymbol(input.toUpperCase());
+  const handleSearch = () => {
+    const upper = input.toUpperCase();
+    setSymbol(upper);
+    onSearch?.(upper);
+  };
 
   const renderChart = () => {
     const chartProps = {
